@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <!-- รองรับมือถือเต็มรูปแบบ ป้องกันการซูมเมื่อเคาะนิ้วรัวๆ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>BiteCraft: ร้านอาหาร & มินิเกม</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-tap-highlight-color: transparent; /* ลบเอฟเฟกต์กระพริบตอนกดบนมือถือ */
+        }
+        
+        /* ---------------- Game Animations & Styles ---------------- */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes slideIn {
+            0% { transform: translateX(100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+        }
+
+        .animate-pop { animation: popIn 0.3s ease-out forwards; }
+        .animate-slide { animation: slideIn 0.4s ease-out forwards; }
+        .animate-shake { animation: shake 0.2s ease-in-out; }
+        
+        .ingredient-btn {
+            transition: all 0.1s;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .ingredient-btn:active {
+            transform: scale(0.9);
+            filter: brightness(0.8);
+        }
+        
+        .order-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .timer-bar-container {
+            width: 100%;
+            background-color: #374151;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .timer-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #f97316 0%, #ef4444 100%);
+            transition: width 1s linear;
+        }
+
+        .floating-score {
+            position: absolute;
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 1.5rem;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            z-index: 50;
+        }
+
+        /* ซ่อน Scrollbar สำหรับเมนูเลื่อนแนวนอนบนมือถือ */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="min-h-[100dvh] bg-gray-50 text-gray-800 pb-16">
+
+    <!-- ========================================== -->
+    <!--            RESTAURANT VIEW                 -->
+    <!-- ========================================== -->
+    <div id="restaurantView" class="block">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm sticky top-0 z-40">
+            <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+                <!-- เปลี่ยนไอคอนเป็นรูปช้อนส้อมร้านอาหาร -->
+                <div class="flex items-center gap-2 text-orange-600 font-bold text-xl md:text-2xl tracking-tighter">
+                    <svg class="w-7 h-7 md:w-8 md:h-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/>
+                        <path d="M7 2v20"/>
+                        <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
+                    </svg>
+                    <span>Bite<span class="text-gray-900">Craft</span></span>
+                </div>
+                <div class="flex items-center gap-2 md:gap-3">
+                    <button onclick="showGame()" class="flex items-center gap-1 text-[11px] md:text-xs bg-orange-100 text-orange-700 font-bold px-3 py-2 rounded-full hover:bg-orange-200 transition shadow-sm border border-orange-200 active:scale-95">
+                        🎮 <span class="hidden sm:inline">เล่นเกมรับส่วนลด</span><span class="sm:hidden">มินิเกม</span>
+                    </button>
+                    <button onclick="toggleCart()" class="bg-orange-600 text-white p-2.5 rounded-full hover:bg-orange-700 transition relative shadow-sm active:scale-95">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                        <span id="cartBadge" class="hidden absolute -top-1 -right-1 bg-gray-900 text-white text-[10px] md:text-xs rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center font-bold">0</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="bg-gradient-to-r from-gray-900 to-gray-800 text-white py-12 md:py-16 px-4 text-center">
+            <div class="max-w-3xl mx-auto">
+                <h1 class="text-3xl md:text-5xl font-bold mb-4 leading-tight">
+                    อาหารตามสั่งยุคใหม่ <br/>
+                    <span class="text-orange-400">อร่อย ล้ำ ดีต่อสุขภาพ</span>
+                </h1>
+                <p class="text-gray-300 text-sm md:text-lg mb-4 md:mb-8">
+                    หมดปัญหา "วันนี้กินอะไรดี?" ให้ AI ของเราช่วยออกแบบมื้ออาหารที่ใช่ สำหรับเป้าหมายสุขภาพของคุณ
+                </p>
+            </div>
+        </section>
+
+        <!-- AI Assistant Feature -->
+        <section class="max-w-4xl mx-auto px-4 -mt-8 relative z-10 mb-8">
+            <div class="bg-white rounded-2xl shadow-xl p-5 md:p-8 border border-gray-100">
+                <div class="flex items-center gap-2 mb-4 text-indigo-600 font-semibold text-base md:text-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+                    <h2>BiteCraft AI: วันนี้ร่างกายคุณต้องการอะไร?</h2>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4 md:mb-6">
+                    <button onclick="aiSuggest('build_muscle')" class="ai-btn p-2 md:p-3 rounded-xl text-xs md:text-sm font-medium transition bg-gray-100 hover:bg-indigo-50 text-gray-700 flex flex-col items-center gap-1 active:scale-95">💪 เน้นกล้ามเนื้อ</button>
+                    <button onclick="aiSuggest('lose_weight')" class="ai-btn p-2 md:p-3 rounded-xl text-xs md:text-sm font-medium transition bg-gray-100 hover:bg-indigo-50 text-gray-700 flex flex-col items-center gap-1 active:scale-95">🥗 คุมแคลอรี่</button>
+                    <button onclick="aiSuggest('brain_boost')" class="ai-btn p-2 md:p-3 rounded-xl text-xs md:text-sm font-medium transition bg-gray-100 hover:bg-indigo-50 text-gray-700 flex flex-col items-center gap-1 active:scale-95">🧠 บำรุงสมอง</button>
+                    <button onclick="aiSuggest('spicy')" class="ai-btn p-2 md:p-3 rounded-xl text-xs md:text-sm font-medium transition bg-gray-100 hover:bg-indigo-50 text-gray-700 flex flex-col items-center gap-1 active:scale-95">🌶️ แซ่บแก้เครียด</button>
+                </div>
+
+                <!-- AI Result -->
+                <div id="aiResult" class="hidden bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center">
+                    <img id="aiImage" src="" alt="" class="w-full md:w-32 h-40 md:h-32 object-cover rounded-lg shadow-sm" onerror="this.src='https://placehold.co/600x400/f3f4f6/9ca3af?text=Image+Not+Available'">
+                    <div class="flex-1 text-center md:text-left w-full">
+                        <p class="text-xs font-bold text-indigo-600 mb-1">✨ AI แนะนำสำหรับคุณ</p>
+                        <h3 id="aiName" class="text-lg md:text-xl font-bold text-gray-900 leading-tight"></h3>
+                        <p id="aiDesc" class="text-xs md:text-sm text-gray-600 mb-2 mt-1 line-clamp-2"></p>
+                        <div class="flex gap-2 justify-center md:justify-start">
+                            <span id="aiKcal" class="px-2 py-1 bg-white text-[10px] md:text-xs font-semibold text-orange-600 rounded-md shadow-sm border border-gray-100"></span>
+                            <span id="aiProtein" class="px-2 py-1 bg-white text-[10px] md:text-xs font-semibold text-green-600 rounded-md shadow-sm border border-gray-100"></span>
+                        </div>
+                    </div>
+                    <button id="aiOrderBtn" class="w-full md:w-auto bg-orange-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-orange-700 shadow-lg active:scale-95 transition">สั่งเลย</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Menu Gallery -->
+        <section class="max-w-6xl mx-auto px-4 py-4 md:py-8">
+            <h2 class="text-xl md:text-2xl font-bold mb-4 md:mb-6 text-gray-900 border-l-4 border-orange-500 pl-3">เมนูเด่นประจำสัปดาห์</h2>
+            
+            <!-- Category Tabs (Horizontal Scroll for Mobile) -->
+            <div class="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide snap-x" id="categoryTabs">
+                <button onclick="filterCategory('All')" class="cat-btn shrink-0 snap-start px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-orange-600 text-white shadow-md transition">ทั้งหมด</button>
+                <button onclick="filterCategory('Thai Fusion')" class="cat-btn shrink-0 snap-start px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 transition">Thai Fusion</button>
+                <button onclick="filterCategory('High Protein')" class="cat-btn shrink-0 snap-start px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 transition">High Protein</button>
+                <button onclick="filterCategory('Brain Boost')" class="cat-btn shrink-0 snap-start px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 transition">Brain Boost</button>
+            </div>
+
+            <div id="menuGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                <!-- Rendered via JS -->
+            </div>
+        </section>
+
+        <!-- Cart Drawer Modal (Mobile Optimised padding-bottom) -->
+        <div id="cartModal" class="fixed inset-0 bg-black/50 z-[60] flex justify-end hidden transition-opacity">
+            <div class="w-full sm:w-[400px] bg-white h-[100dvh] flex flex-col shadow-2xl">
+                <div class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
+                    <h2 class="text-lg md:text-xl font-bold flex items-center gap-2 text-gray-900">🛒 ตะกร้าของคุณ</h2>
+                    <button onclick="toggleCart()" class="p-2 hover:bg-gray-100 rounded-full transition text-gray-500">✕</button>
+                </div>
+
+                <div id="cartItemsList" class="flex-1 overflow-y-auto p-4 md:p-5 space-y-3 md:space-y-4 bg-gray-50">
+                    <!-- Cart Items -->
+                </div>
+
+                <!-- Bottom Bar uses safe-area for iPhone home bar -->
+                <div class="p-4 md:p-5 border-t border-gray-100 bg-white shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <div class="mb-3 md:mb-4">
+                        <div class="flex gap-2">
+                            <input type="text" id="promoInput" placeholder="รหัสส่วนลด" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-orange-500">
+                            <button onclick="applyPromo()" class="bg-gray-800 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-900 transition active:scale-95">ใช้โค้ด</button>
+                        </div>
+                        <p id="promoMsg" class="text-[10px] md:text-xs mt-1 font-medium"></p>
+                    </div>
+
+                    <div class="flex justify-between items-center mb-1 text-sm text-gray-500">
+                        <span>ยอดรวม</span>
+                        <span id="subtotalPrice">฿0</span>
+                    </div>
+                    <div id="discountRow" class="flex justify-between items-center mb-1 text-sm text-green-600 hidden">
+                        <span>ส่วนลด</span>
+                        <span id="discountAmount">-฿0</span>
+                    </div>
+                    <div class="flex justify-between items-center mb-3 md:mb-4 border-t pt-2 font-bold text-base md:text-lg">
+                        <span>ยอดชำระสุทธิ</span>
+                        <span id="finalPrice" class="text-orange-600">฿0</span>
+                    </div>
+                    <button onclick="checkout()" id="checkoutBtn" disabled class="w-full bg-gray-900 disabled:bg-gray-300 text-white py-3.5 md:py-4 rounded-xl font-bold transition shadow-lg active:scale-95">ยืนยันการสั่งซื้อ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receipt Modal -->
+        <div id="receiptModal" class="fixed inset-0 bg-black/60 z-[70] flex justify-center items-center p-4 hidden">
+            <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6 text-center relative animate-pop">
+                <div class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl font-bold">✓</div>
+                <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-1">สั่งซื้อสำเร็จ!</h2>
+                <p class="text-xs text-gray-500 mb-4">BiteCraft Receipt</p>
+                
+                <div id="receiptDetails" class="text-left text-xs md:text-sm text-gray-600 space-y-1 mb-4 border-y border-dashed py-3">
+                    <!-- Receipt items -->
+                </div>
+                
+                <button onclick="closeReceipt()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition active:scale-95">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!--                 GAME VIEW                  -->
+    <!-- ========================================== -->
+    <!-- เปลี่ยนความสูงเป็น 100dvh ให้พอดีจอมือถือเป๊ะๆ ไม่ถูกแถบ URL บัง -->
+    <div id="gameAppView" class="hidden fixed top-0 left-0 w-full h-[100dvh] z-[100] bg-gray-900 text-white overflow-hidden flex flex-col touch-manipulation">
+        
+        <!-- Screen 1: Game Main Menu -->
+        <div id="menuScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-50 p-6 text-center">
+            <div class="animate-pop max-w-md w-full">
+                <h1 class="text-4xl md:text-5xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500 tracking-tighter">
+                    BiteCraft
+                </h1>
+                <h2 class="text-lg md:text-2xl font-bold text-gray-300 mb-6">AI Kitchen Rush ⏱️</h2>
+                
+                <div class="bg-gray-800 p-5 md:p-6 rounded-2xl mb-6 md:mb-8 border border-gray-700 text-left">
+                    <h3 class="text-orange-400 font-bold mb-2 md:mb-3 text-sm md:text-base">🍳 วิธีเล่น (How to play):</h3>
+                    <ul class="text-gray-300 text-xs md:text-sm space-y-2">
+                        <li>1. ดูออเดอร์เมนูที่ลูกค้าสั่งด้านบน</li>
+                        <li>2. กดเลือก <b>"วัตถุดิบ 3 อย่าง"</b> ให้ถูกต้องตามสูตร</li>
+                        <li>3. กดปุ่ม <b>"เสิร์ฟ"</b> ก่อนหมดเวลา!</li>
+                        <li>🎁 <span class="text-green-400 font-bold">ทำคะแนนให้ถึง 500 แต้ม รับโค้ดส่วนลด 50 บาท ไปใช้สั่งอาหารได้เลย!</span></li>
+                    </ul>
+                </div>
+
+                <button onclick="startGame()" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 rounded-xl text-lg md:text-xl transition-transform active:scale-95 shadow-lg shadow-orange-500/30 mb-4">
+                    เริ่มเกม (Start Game)
+                </button>
+                <button onclick="returnToRestaurantFromMenu()" class="text-gray-400 hover:text-white underline text-xs md:text-sm transition p-2">
+                    &larr; กลับไปยังหน้าร้าน BiteCraft
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 2: Game UI -->
+        <div id="gameScreen" class="hidden flex flex-col h-full w-full max-w-lg mx-auto relative bg-gray-900">
+            
+            <!-- Header: Score & Timer -->
+            <div class="p-3 md:p-4 bg-gray-800/80 backdrop-blur border-b border-gray-700 flex flex-col gap-2 md:gap-3 shrink-0 pt-[max(1rem,env(safe-area-inset-top))]">
+                <div class="flex justify-between items-start">
+                    <div class="flex flex-col gap-0.5 md:gap-1">
+                        <div class="text-xs md:text-sm font-bold text-gray-400">
+                            SCORE: <span id="scoreDisplay" class="text-xl md:text-2xl text-white">0</span>
+                        </div>
+                        <div class="text-[10px] md:text-xs font-bold text-gray-400 bg-gray-900 px-2 py-0.5 md:px-3 md:py-1 rounded-full border border-gray-700 inline-block w-max">
+                            TARGET: 500
+                        </div>
+                    </div>
+                    <!-- Quit Game Button -->
+                    <button onclick="quitGame()" class="w-8 h-8 flex items-center justify-center bg-gray-700/50 hover:bg-gray-600 text-gray-300 rounded-full font-bold text-base transition active:scale-90" title="ออกจาเกม">✕</button>
+                </div>
+                
+                <!-- Time Bar -->
+                <div class="flex items-center gap-2 md:gap-3">
+                    <span class="text-lg md:text-xl">⏱️</span>
+                    <div class="timer-bar-container h-2 md:h-3">
+                        <div id="timeBar" class="timer-bar" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle: Order Queue -->
+            <div class="flex-1 p-3 md:p-4 overflow-hidden flex flex-col justify-center gap-3 relative" id="orderQueue">
+                <!-- Orders injected here -->
+                <div class="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
+                    <span class="text-[8rem] md:text-9xl">👨‍🍳</span>
+                </div>
+            </div>
+
+            <!-- Bottom: Kitchen Prep & Ingredients -->
+            <!-- ใส่ safe-area-inset-bottom สำหรับหน้าจอ iPhone รุ่นใหม่ๆ ให้ปุ่มไม่ทับ Home bar -->
+            <div class="bg-gray-800 rounded-t-3xl p-4 md:p-5 shrink-0 border-t border-gray-700 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                
+                <!-- Prep Area -->
+                <div class="bg-gray-900 rounded-xl p-2 md:p-3 mb-3 md:mb-4 flex justify-between items-center border border-gray-700 h-14 md:h-16">
+                    <div class="text-gray-400 text-[10px] md:text-xs font-bold w-12 text-center leading-tight">จานเตรียมอาหาร</div>
+                    <div id="prepPlate" class="flex-1 flex justify-center gap-2 text-2xl md:text-3xl">
+                        <!-- Emojis go here -->
+                    </div>
+                    <button onclick="clearPlate()" class="w-8 h-8 md:w-10 md:h-10 bg-red-500/20 text-red-400 rounded-full flex justify-center items-center font-bold text-sm md:text-base hover:bg-red-500/40 active:scale-90 transition">
+                        X
+                    </button>
+                </div>
+
+                <!-- Ingredient Buttons Grid (ปรับให้ปุ่มกระทัดรัดขึ้นบนมือถือ) -->
+                <div class="grid grid-cols-4 gap-1.5 md:gap-2 mb-3 md:mb-4">
+                    <!-- Meats -->
+                    <button onclick="addIngredient('🥩')" class="ingredient-btn bg-red-900/40 border border-red-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🥩</button>
+                    <button onclick="addIngredient('🍗')" class="ingredient-btn bg-orange-900/40 border border-orange-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🍗</button>
+                    <button onclick="addIngredient('🐟')" class="ingredient-btn bg-blue-900/40 border border-blue-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🐟</button>
+                    <button onclick="addIngredient('🍤')" class="ingredient-btn bg-pink-900/40 border border-pink-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🍤</button>
+                    
+                    <!-- Veggies/Carbs -->
+                    <button onclick="addIngredient('🌿')" class="ingredient-btn bg-green-900/40 border border-green-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🌿</button>
+                    <button onclick="addIngredient('🥦')" class="ingredient-btn bg-green-900/40 border border-green-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🥦</button>
+                    <button onclick="addIngredient('🍚')" class="ingredient-btn bg-gray-700 border border-gray-600 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🍚</button>
+                    <button onclick="addIngredient('🍝')" class="ingredient-btn bg-yellow-900/40 border border-yellow-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🍝</button>
+                    
+                    <!-- Extras -->
+                    <button onclick="addIngredient('🌶️')" class="ingredient-btn bg-red-900/40 border border-red-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🌶️</button>
+                    <button onclick="addIngredient('🥑')" class="ingredient-btn bg-green-900/40 border border-green-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🥑</button>
+                    <button onclick="addIngredient('🥚')" class="ingredient-btn bg-orange-900/40 border border-orange-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🥚</button>
+                    <button onclick="addIngredient('🍋')" class="ingredient-btn bg-yellow-900/40 border border-yellow-700/50 rounded-xl h-12 md:h-14 text-2xl md:text-3xl shadow-inner flex items-center justify-center">🍋</button>
+                </div>
+
+                <!-- Serve Button -->
+                <button onclick="serveDish()" id="serveBtn" class="w-full bg-green-500 hover:bg-green-400 text-white font-bold py-3.5 md:py-4 rounded-xl text-lg md:text-xl transition-all shadow-lg shadow-green-500/20 flex justify-center items-center gap-2 active:scale-95">
+                    เสิร์ฟอาหาร (SERVE) 🛎️
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 3: Game Over / Reward -->
+        <div id="gameOverScreen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900/95 backdrop-blur z-50 p-4 md:p-6 text-center">
+            <div class="animate-pop max-w-md w-full bg-gray-800 p-6 md:p-8 rounded-3xl border border-gray-700 shadow-2xl">
+                <h2 id="endTitle" class="text-3xl md:text-4xl font-black mb-2 text-white">หมดเวลา!</h2>
+                <p class="text-gray-400 text-xs md:text-sm mb-4 md:mb-6">คะแนนที่คุณทำได้</p>
+                <div class="text-5xl md:text-6xl font-bold text-orange-500 mb-6 md:mb-8" id="finalScore">0</div>
+
+                <!-- Reward Area -->
+                <div id="rewardBox" class="hidden bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/50 rounded-2xl p-4 md:p-6 mb-6 md:mb-8">
+                    <h3 class="text-green-400 font-bold text-base md:text-lg mb-2">🎉 ยินดีด้วย! คุณได้รับโค้ดส่วนลด</h3>
+                    <p class="text-xs md:text-sm text-gray-300 mb-4">ระบบจะนำโค้ดส่วนลด 50 บาท ไปใส่ในตะกร้าสินค้าให้คุณโดยอัตโนมัติ!</p>
+                    <div class="bg-gray-900 py-2 md:py-3 px-4 rounded-lg flex justify-center items-center border border-gray-700">
+                        <span class="font-mono text-lg md:text-xl font-bold text-white tracking-widest" id="promoCode">BITE-WIN50</span>
+                    </div>
+                </div>
+
+                <div id="failBox" class="hidden bg-red-500/10 border border-red-500/30 rounded-2xl p-4 mb-6 md:mb-8">
+                    <p class="text-red-400 text-sm md:text-base">ยังไม่ถึงเป้าหมาย 500 คะแนน ลองใหม่อีกครั้งนะเชฟ!</p>
+                </div>
+
+                <div class="flex gap-2 md:gap-3">
+                    <button onclick="resetGame()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl transition active:scale-95 text-sm md:text-base">
+                        เล่นอีกครั้ง
+                    </button>
+                    <button onclick="returnToRestaurantFromGameOver()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition flex justify-center items-center shadow-lg active:scale-95 text-sm md:text-base">
+                        กลับหน้าร้าน
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification (Global) ปรับให้อยู่เหนือ Home bar บนมือถือ -->
+    <div id="toastNotification" class="fixed bottom-12 md:bottom-10 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-5 py-3 rounded-full shadow-2xl z-[200] hidden transition-opacity font-bold text-xs md:text-sm whitespace-nowrap mb-[env(safe-area-inset-bottom)]">
+        🎉 ได้รับโค้ดส่วนลดแล้ว! ไปที่ตะกร้าเพื่อใช้งานได้เลย
+    </div>
+
+    <!-- ========================================== -->
+    <!--               JAVASCRIPT LOGIC             -->
+    <!-- ========================================== -->
+    <script>
+        /* -------------------------------------------------------------
+           RESTAURANT DATA & LOGIC 
+        --------------------------------------------------------------*/
+        const menus = [
+            { id: 1, category: "Thai Fusion", name: "กะเพราเนื้อวากิว (เส้นบุก)", description: "เผ็ดร้อนถึงใจ ใช้เนื้อวากิวสับพรีเมียม เสิร์ฟพร้อมเส้นบุกแคลอรี่ต่ำ", price: 189, image: "https://images.unsplash.com/photo-1564834724105-918b73d1b9e0?auto=format&fit=crop&w=600&q=80", ingredients: ["เนื้อวากิวสับ", "ใบกะเพรา", "เส้นบุก"], health: { kcal: 320, protein: "28g", carbs: "12g", fat: "18g" } },
+            { id: 2, category: "Thai Fusion", name: "พาสต้าต้มยำกุ้งแม่น้ำ", description: "พาสต้าเส้นหนึบคลุกเคล้าซอสต้มยำกุ้งแม่น้ำรสจัดจ้าน", price: 249, image: "https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?auto=format&fit=crop&w=600&q=80", ingredients: ["กุ้งแม่น้ำ", "พาสต้าโฮลวีท", "เครื่องต้มยำ"], health: { kcal: 420, protein: "35g", carbs: "45g", fat: "12g" } },
+            { id: 3, category: "Thai Fusion", name: "ข้าวผัดเขียวหวานไก่ย่าง", description: "ข้าวผัดเครื่องแกงเขียวหวานหอมกะทิ เสิร์ฟพร้อมไก่ย่างเนื้อนุ่ม", price: 159, image: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=600&q=80", ingredients: ["อกไก่ย่าง", "ข้าวไรซ์เบอร์รี่", "พริกแกงเขียวหวาน"], health: { kcal: 450, protein: "30g", carbs: "50g", fat: "15g" } },
+            { id: 4, category: "Thai Fusion", name: "มัสมั่นไก่ซูวี (คีโต)", description: "แกงมัสมั่นรสกลมกล่อม ใช้น้ำตาลอิริทริทอลและไก่ซูวี ไร้แป้ง", price: 179, image: "https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80", ingredients: ["น่องไก่ซูวี", "กะทิธัญพืช", "ถั่วลิสง"], health: { kcal: 380, protein: "25g", carbs: "8g", fat: "28g" } },
+            
+            { id: 5, category: "High Protein", name: "อกไก่ย่างสมุนไพร ข้าวไรซ์เบอร์รี่", description: "อกไก่หมักสมุนไพรย่างเตาถ่าน เสิร์ฟคู่ข้าวไรซ์เบอร์รี่ออร์แกนิค", price: 129, image: "https://images.unsplash.com/photo-1598514982205-f36b96d1e8d4?auto=format&fit=crop&w=600&q=80", ingredients: ["อกไก่ 200g", "ข้าวไรซ์เบอร์รี่", "บร็อคโคลี่"], health: { kcal: 310, protein: "45g", carbs: "30g", fat: "4g" } },
+            { id: 6, category: "High Protein", name: "สลัดเนื้อสันใน น้ำสลัดงาใส", description: "เนื้อสันในย่างระดับ Medium Rare บนผักสลัดสดกรอบ", price: 219, image: "https://images.unsplash.com/photo-1550304943-4f24f54ddde9?auto=format&fit=crop&w=600&q=80", ingredients: ["เนื้อสันใน 150g", "ผักคอส", "น้ำสลัดงาญี่ปุ่น"], health: { kcal: 280, protein: "32g", carbs: "10g", fat: "12g" } },
+            { id: 7, category: "High Protein", name: "ปลากะพงนึ่งมะนาว (ไร้ก้าง)", description: "เนื้อปลากะพงขาวนึ่งมะนาวรสแซ่บ โปรตีนย่อยง่าย", price: 199, image: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=600&q=80", ingredients: ["ปลากะพง 200g", "พริกขี้หนู", "มะนาวแท้"], health: { kcal: 220, protein: "38g", carbs: "5g", fat: "4g" } },
+            { id: 8, category: "High Protein", name: "สเต็กเต้าหู้ ซอสเห็ดหอม", description: "เต้าหู้โมเมนย่างซอสเห็ดหอมสูตรโฮมเมด สำหรับสายวีแกน", price: 149, image: "https://images.unsplash.com/photo-1511690656952-34342bb7c2f2?auto=format&fit=crop&w=600&q=80", ingredients: ["เต้าหู้โมเมน", "เห็ดหอม", "หน่อไม้ฝรั่ง"], health: { kcal: 250, protein: "20g", carbs: "15g", fat: "12g" } },
+
+            { id: 9, category: "Brain Boost", name: "ข้าวหน้าอโวคาโดไข่ออนเซ็น", description: "ซุปเปอร์ฟู้ดบำรุงสมอง อุดมด้วยไขมันดีจากอโวคาโดและไข่แดง", price: 169, image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=600&q=80", ingredients: ["อโวคาโด", "ไข่ออนเซ็น", "ข้าวญี่ปุ่น"], health: { kcal: 410, protein: "12g", carbs: "48g", fat: "19g" } },
+            { id: 10, category: "Brain Boost", name: "แซลมอนคีนัวสไปซี่มาโย", description: "แซลมอนเต๋าสดราดซอสมาโย บนข้าวคีนัวผสมข้าวกล้อง", price: 229, image: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=600&q=80", ingredients: ["ปลาแซลมอน", "คีนัว 3 สี", "อโวคาโด"], health: { kcal: 450, protein: "32g", carbs: "35g", fat: "22g" } },
+            { id: 11, category: "Brain Boost", name: "ข้าวผัดปลาทู ซุปมิโซะ", description: "ปลาทูไทยแกะก้างผัดข้าวหอมมะลิ โอเมก้า 3 สูงเทียบเท่าปลาทะเลลึก", price: 139, image: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=600&q=80", ingredients: ["เนื้อปลาทู", "ข้าวหอมมะลิ", "ซุปมิโซะ"], health: { kcal: 380, protein: "22g", carbs: "45g", fat: "14g" } },
+            { id: 12, category: "Brain Boost", name: "ยำวอลนัทเห็ดรวม", description: "เห็ดรวมย่างคลุกเคล้าด้วยน้ำยำรสแซ่บ โรยวอลนัทอบกรอบบำรุงสมอง", price: 159, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=600&q=80", ingredients: ["วอลนัทอบ", "เห็ดรวม", "น้ำยำสูตรคลีน"], health: { kcal: 210, protein: "8g", carbs: "12g", fat: "16g" } }
+        ];
+
+        let cart = [];
+        let discount = 0;
+
+        function renderMenus(category = 'All') {
+            const grid = document.getElementById('menuGrid');
+            grid.innerHTML = '';
+            const filtered = category === 'All' ? menus : menus.filter(m => m.category === category);
+            
+            filtered.forEach(menu => {
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition flex flex-col";
+                card.innerHTML = `
+                    <div class="relative h-48 md:h-56 overflow-hidden">
+                        <img src="${menu.image}" alt="${menu.name}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/600x400/f3f4f6/9ca3af?text=Image+Not+Available'">
+                        <div class="absolute top-3 left-3 bg-gray-900/80 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 rounded-md font-semibold">${menu.category}</div>
+                        <div class="absolute top-3 right-3 bg-white/95 px-3 py-1 rounded-full font-bold text-gray-900 text-sm">฿${menu.price}</div>
+                    </div>
+                    <div class="p-4 md:p-5 flex flex-col flex-1">
+                        <h3 class="text-lg md:text-xl font-bold mb-1 md:mb-2 text-gray-900 leading-tight">${menu.name}</h3>
+                        <p class="text-xs md:text-sm text-gray-500 mb-3 line-clamp-2">${menu.description}</p>
+                        <div class="flex flex-wrap gap-1 mb-4">
+                            ${menu.ingredients.map(ing => `<span class="text-[10px] md:text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md">${ing}</span>`).join('')}
+                        </div>
+                        <div class="bg-orange-50/50 border border-orange-100 rounded-xl p-3 mb-4 mt-auto">
+                            <div class="flex justify-between items-center text-xs md:text-sm font-semibold mb-2 text-orange-600">
+                                <span>🔥 พลังงาน</span><span>${menu.health.kcal} kcal</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-center text-[10px] md:text-xs">
+                                <div class="bg-white p-1 rounded border">โปรตีน<br><b class="text-xs">${menu.health.protein}</b></div>
+                                <div class="bg-white p-1 rounded border">คาร์บ<br><b class="text-xs">${menu.health.carbs}</b></div>
+                                <div class="bg-white p-1 rounded border">ไขมัน<br><b class="text-xs">${menu.health.fat}</b></div>
+                            </div>
+                        </div>
+                        <button onclick="addToCart(${menu.id})" class="w-full bg-gray-100 hover:bg-orange-600 hover:text-white text-gray-800 py-2.5 rounded-xl font-semibold text-sm transition active:scale-95">เพิ่มลงตะกร้า</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterCategory(cat) {
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.className = "cat-btn shrink-0 snap-start px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 transition";
+            });
+            event.target.className = "cat-btn shrink-0 snap-start px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-orange-600 text-white shadow-md transition";
+            renderMenus(cat);
+        }
+
+        function aiSuggest(mood) {
+            const aiResult = document.getElementById('aiResult');
+            aiResult.classList.remove('hidden');
+            
+            let matched = menus[0];
+            if(mood === 'build_muscle') matched = menus.find(m => m.category === 'High Protein') || menus[0];
+            else if(mood === 'brain_boost') matched = menus.find(m => m.category === 'Brain Boost') || menus[0];
+            else matched = menus[Math.floor(Math.random() * menus.length)];
+
+            document.getElementById('aiImage').src = matched.image;
+            document.getElementById('aiName').textContent = matched.name;
+            document.getElementById('aiDesc').textContent = matched.description;
+            document.getElementById('aiKcal').textContent = `🔥 ${matched.health.kcal} kcal`;
+            document.getElementById('aiProtein').textContent = `Pro: ${matched.health.protein}`;
+            
+            document.getElementById('aiOrderBtn').onclick = () => {
+                addToCart(matched.id);
+                showGlobalToast(`เพิ่ม ${matched.name} ลงตะกร้าแล้ว!`);
+            };
+        }
+
+        function addToCart(id) {
+            const item = menus.find(m => m.id === id);
+            const found = cart.find(c => c.id === id);
+            if(found) found.quantity++;
+            else cart.push({ ...item, quantity: 1 });
+            updateCartUI();
+        }
+
+        function updateQuantity(id, delta) {
+            const item = cart.find(c => c.id === id);
+            if(item) {
+                item.quantity += delta;
+                if(item.quantity <= 0) cart = cart.filter(c => c.id !== id);
+            }
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const badge = document.getElementById('cartBadge');
+            const list = document.getElementById('cartItemsList');
+            const subtotalEl = document.getElementById('subtotalPrice');
+            const finalEl = document.getElementById('finalPrice');
+            const checkoutBtn = document.getElementById('checkoutBtn');
+
+            const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
+            const subtotal = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+            const final = Math.max(0, subtotal - discount);
+
+            if(totalItems > 0) {
+                badge.textContent = totalItems;
+                badge.classList.remove('hidden');
+                checkoutBtn.removeAttribute('disabled');
+            } else {
+                badge.classList.add('hidden');
+                checkoutBtn.setAttribute('disabled', 'true');
+            }
+
+            subtotalEl.textContent = `฿${subtotal}`;
+            finalEl.textContent = `฿${final}`;
+
+            list.innerHTML = cart.length === 0 ? '<div class="text-center text-gray-400 mt-20 text-sm">ยังไม่มีเมนูในตะกร้า</div>' : cart.map(item => `
+                <div class="flex gap-3 bg-white p-3 rounded-xl shadow-sm border items-center">
+                    <img src="${item.image}" class="w-14 h-14 md:w-16 md:h-16 object-cover rounded-lg">
+                    <div class="flex-1">
+                        <h4 class="font-bold text-xs md:text-sm leading-tight mb-1">${item.name}</h4>
+                        <p class="text-orange-600 font-semibold text-xs md:text-sm">฿${item.price}</p>
+                    </div>
+                    <div class="flex items-center bg-gray-100 rounded-lg shrink-0">
+                        <button onclick="updateQuantity(${item.id}, -1)" class="px-2.5 py-1 text-lg active:bg-gray-200 rounded-l-lg">-</button>
+                        <span class="w-5 text-center text-xs md:text-sm font-bold">${item.quantity}</span>
+                        <button onclick="updateQuantity(${item.id}, 1)" class="px-2.5 py-1 text-lg active:bg-gray-200 rounded-r-lg">+</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleCart() {
+            const modal = document.getElementById('cartModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function applyPromo() {
+            const code = document.getElementById('promoInput').value.trim().toUpperCase();
+            const msg = document.getElementById('promoMsg');
+            const row = document.getElementById('discountRow');
+            const amountEl = document.getElementById('discountAmount');
+
+            if(code.startsWith('BITE-WIN50')) {
+                discount = 50;
+                msg.textContent = '✅ ใช้โค้ดส่วนลด 50 บาทสำเร็จ!';
+                msg.className = 'text-[10px] md:text-xs mt-1 font-medium text-green-600';
+                row.classList.remove('hidden');
+                amountEl.textContent = `-฿50`;
+                updateCartUI();
+            } else if (code === '') {
+                 // Do nothing
+            } else {
+                discount = 0;
+                msg.textContent = '❌ โค้ดส่วนลดไม่ถูกต้อง';
+                msg.className = 'text-[10px] md:text-xs mt-1 font-medium text-red-500';
+                row.classList.add('hidden');
+                updateCartUI();
+            }
+        }
+
+        function checkout() {
+            const receiptModal = document.getElementById('receiptModal');
+            const details = document.getElementById('receiptDetails');
+            
+            const subtotal = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+            const final = Math.max(0, subtotal - discount);
+            const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+            details.innerHTML = `
+                <div class="flex justify-between font-bold mb-2"><span>Order ID:</span><span>${orderId}</span></div>
+                ${cart.map(i => `<div class="flex justify-between mb-1"><span>${i.name} x${i.quantity}</span><span>฿${i.price * i.quantity}</span></div>`).join('')}
+                <div class="border-t mt-3 pt-2 font-bold flex justify-between text-sm md:text-base"><span>ยอดชำระสุทธิ:</span><span class="text-orange-600">฿${final}</span></div>
+            `;
+
+            toggleCart();
+            receiptModal.classList.remove('hidden');
+            cart = [];
+            discount = 0;
+            document.getElementById('promoInput').value = '';
+            document.getElementById('promoMsg').textContent = '';
+            document.getElementById('discountRow').classList.add('hidden');
+            updateCartUI();
+        }
+
+        function closeReceipt() {
+            document.getElementById('receiptModal').classList.add('hidden');
+        }
+
+        function showGlobalToast(message) {
+            const toast = document.getElementById('toastNotification');
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 4000);
+        }
+
+        window.onload = () => renderMenus();
+
+
+        /* -------------------------------------------------------------
+           INTEGRATION & NAVIGATION (BETWEEN RESTAURANT & GAME)
+        --------------------------------------------------------------*/
+        let wonPromoCode = null;
+
+        function showGame() {
+            // ป้องกันการไถหน้าจอเลื่อน (Scroll) ขณะเล่นเกม
+            document.body.style.overflow = 'hidden';
+            
+            // Switch views
+            document.getElementById('restaurantView').classList.add('hidden');
+            document.getElementById('gameAppView').classList.remove('hidden');
+            
+            // Show game menu by default
+            document.getElementById('menuScreen').classList.remove('hidden');
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+        }
+
+        function showRestaurant(autoApplyCode = null) {
+            // คืนค่าการไถหน้าจอให้เป็นปกติ
+            document.body.style.overflow = '';
+            
+            // Switch views
+            document.getElementById('gameAppView').classList.add('hidden');
+            document.getElementById('restaurantView').classList.remove('hidden');
+
+            if (autoApplyCode) {
+                // Auto fill the promo code in the cart
+                document.getElementById('promoInput').value = autoApplyCode;
+                applyPromo(); // Apply it instantly
+                showGlobalToast('🎉 โค้ดส่วนลดถูกใส่ในตะกร้าอัตโนมัติเรียบร้อยแล้ว!');
+            }
+        }
+
+
+        /* -------------------------------------------------------------
+           GAME DATA & LOGIC 
+        --------------------------------------------------------------*/
+        const recipes = [
+            { id: 1, name: "กะเพราวากิว", ingredients: ['🥩', '🌿', '🌶️'], type: "Thai Fusion", score: 100 },
+            { id: 2, name: "แซลมอนคีนัว", ingredients: ['🐟', '🍚', '🥑'], type: "Brain Boost", score: 120 },
+            { id: 3, name: "พาสต้าต้มยำกุ้ง", ingredients: ['🍤', '🍝', '🍋'], type: "Thai Fusion", score: 150 },
+            { id: 4, name: "ไก่ย่างไรซ์เบอร์รี่", ingredients: ['🍗', '🍚', '🥦'], type: "High Protein", score: 100 },
+            { id: 5, name: "สลัดเนื้อสันใน", ingredients: ['🥩', '🌿', '🥑'], type: "High Protein", score: 120 },
+            { id: 6, name: "ข้าวหน้าไข่ออนเซ็น", ingredients: ['🍚', '🥑', '🥚'], type: "Brain Boost", score: 90 },
+        ];
+
+        let score = 0;
+        let timeLeft = 60; // 60 seconds
+        let gameInterval;
+        let currentOrder = null;
+        let prepPlate = [];
+        const MAX_INGREDIENTS = 3;
+
+        // DOM Elements - Game
+        const menuScreen = document.getElementById('menuScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const timeBar = document.getElementById('timeBar');
+        const orderQueue = document.getElementById('orderQueue');
+        const prepPlateDiv = document.getElementById('prepPlate');
+        const serveBtn = document.getElementById('serveBtn');
+
+        function startGame() {
+            menuScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            
+            score = 0;
+            timeLeft = 60;
+            wonPromoCode = null;
+            updateScore();
+            clearPlate();
+            
+            generateNewOrder();
+            clearInterval(gameInterval);
+            gameInterval = setInterval(gameTick, 1000);
+        }
+
+        function gameTick() {
+            timeLeft--;
+            const percentage = (timeLeft / 60) * 100;
+            timeBar.style.width = `${percentage}%`;
+            
+            if(percentage < 30) timeBar.style.background = '#ef4444'; // Red
+            else timeBar.style.background = 'linear-gradient(90deg, #f97316 0%, #ef4444 100%)';
+
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }
+
+        function generateNewOrder() {
+            const randomIdx = Math.floor(Math.random() * recipes.length);
+            currentOrder = recipes[randomIdx];
+
+            orderQueue.innerHTML = '';
+            const orderEl = document.createElement('div');
+            orderEl.className = 'order-card rounded-2xl p-3 md:p-4 animate-slide flex justify-between items-center z-10 shadow-sm';
+            
+            let tagColor = currentOrder.type === 'Thai Fusion' ? 'bg-red-500' : 
+                           currentOrder.type === 'High Protein' ? 'bg-orange-500' : 'bg-blue-500';
+
+            orderEl.innerHTML = `
+                <div>
+                    <span class="text-[10px] md:text-xs font-bold px-2 py-1 rounded text-white mb-1 md:mb-2 inline-block ${tagColor}">
+                        ${currentOrder.type}
+                    </span>
+                    <h3 class="text-base md:text-xl font-bold text-white leading-tight">${currentOrder.name}</h3>
+                    <p class="text-xs md:text-sm text-gray-400 mt-1">สูตร: ${currentOrder.ingredients.join(' + ')}</p>
+                </div>
+                <div class="text-2xl md:text-3xl bg-gray-900 w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-lg shrink-0">
+                    🍽️
+                </div>
+            `;
+            orderQueue.appendChild(orderEl);
+        }
+
+        function addIngredient(emoji) {
+            if (prepPlate.length < MAX_INGREDIENTS) {
+                prepPlate.push(emoji);
+                renderPlate();
+            }
+        }
+
+        function clearPlate() {
+            prepPlate = [];
+            renderPlate();
+        }
+
+        function renderPlate() {
+            prepPlateDiv.innerHTML = '';
+            prepPlate.forEach(item => {
+                const span = document.createElement('span');
+                span.textContent = item;
+                span.className = 'animate-pop';
+                prepPlateDiv.appendChild(span);
+            });
+        }
+
+        function serveDish() {
+            if (!currentOrder || prepPlate.length === 0) return;
+
+            const sortedRecipe = [...currentOrder.ingredients].sort();
+            const sortedPlate = [...prepPlate].sort();
+            
+            const isMatch = sortedRecipe.length === sortedPlate.length && 
+                            sortedRecipe.every((val, index) => val === sortedPlate[index]);
+
+            if (isMatch) {
+                score += currentOrder.score;
+                updateScore();
+                showFloatingText(`+${currentOrder.score}`, '#4ade80');
+                serveBtn.classList.add('bg-green-400');
+                setTimeout(() => serveBtn.classList.remove('bg-green-400'), 200);
+                
+                clearPlate();
+                generateNewOrder();
+            } else {
+                serveBtn.classList.add('animate-shake', 'bg-red-500');
+                setTimeout(() => serveBtn.classList.remove('animate-shake', 'bg-red-500'), 300);
+                showFloatingText("สูตรผิด!", '#ef4444');
+                clearPlate();
+            }
+        }
+
+        function updateScore() {
+            scoreDisplay.textContent = score;
+        }
+
+        function showFloatingText(text, color) {
+            const floater = document.createElement('div');
+            floater.textContent = text;
+            floater.className = 'floating-score text-lg md:text-2xl';
+            floater.style.color = color;
+            
+            const rect = serveBtn.getBoundingClientRect();
+            floater.style.left = `${rect.left + rect.width / 2 - 20}px`;
+            floater.style.top = `${rect.top - 30}px`;
+            
+            document.body.appendChild(floater);
+            setTimeout(() => document.body.removeChild(floater), 1000);
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            gameScreen.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            
+            document.getElementById('finalScore').textContent = score;
+            
+            const rewardBox = document.getElementById('rewardBox');
+            const failBox = document.getElementById('failBox');
+            const endTitle = document.getElementById('endTitle');
+
+            if (score >= 500) {
+                endTitle.textContent = "เยี่ยมมาก เชฟ!";
+                endTitle.className = "text-3xl md:text-4xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500";
+                rewardBox.classList.remove('hidden');
+                failBox.classList.add('hidden');
+                
+                const randomString = Math.random().toString(36).substring(2, 6).toUpperCase();
+                wonPromoCode = `BITE-WIN50-${randomString}`;
+                document.getElementById('promoCode').textContent = wonPromoCode;
+            } else {
+                wonPromoCode = null;
+                endTitle.textContent = "หมดเวลา!";
+                endTitle.className = "text-3xl md:text-4xl font-black mb-2 text-white";
+                rewardBox.classList.add('hidden');
+                failBox.classList.remove('hidden');
+            }
+        }
+
+        function resetGame() {
+            startGame();
+        }
+
+        function quitGame() {
+            clearInterval(gameInterval);
+            showRestaurant();
+        }
+
+        function returnToRestaurantFromMenu() {
+            showRestaurant();
+        }
+
+        function returnToRestaurantFromGameOver() {
+            showRestaurant(wonPromoCode);
+            wonPromoCode = null; // Clear it out after passing
+        }
+
+    </script>
+</body>
+</html>
